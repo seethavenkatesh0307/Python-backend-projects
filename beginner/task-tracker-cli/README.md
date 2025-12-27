@@ -13,7 +13,7 @@ The application should run from the command line, accept user actions and inputs
     5. List all tasks that are not done
     6. List all tasks that are in progress
 
-## Constrains
+## Constraints
 
     1. You can use any programming language to build this project.
     2. Use positional arguments in command line to accept user inputs.
@@ -23,42 +23,40 @@ The application should run from the command line, accept user actions and inputs
     6. Do not use any external libraries or frameworks to build this project.
     7. Ensure to handle errors and edge cases gracefully.
 
-## Example
+## How to Run
 
 The list of commands and their usage is given below:
 
 ### Adding a new task
-task-cli add "Buy groceries"
+python task-cli.py add "Buy groceries"<br>
 Output: Task added successfully (ID: 1)
 
 ### Updating and deleting tasks
-task-cli update 1 "Buy groceries and cook dinner"
-task-cli delete 1
+python task-cli.py update 1 "Buy groceries and cook dinner"<br>
+python task-cli.py delete 1
 
 ### Marking a task as in progress or done
-task-cli mark-in-progress 1
-task-cli mark-done 1
+python task-cli.py mark-in-progress 1<br>
+python task-cli.py mark-done 1<br>
+python task-cli.py mark-todo 1
 
 ### Listing all tasks
-task-cli list
+python task-cli.py list
 
 ### Listing tasks by status
-task-cli list done
-task-cli list todo
-task-cli list in-progress
+python task-cli.py list done<br>
+python task-cli.py list todo<br>
+python task-cli.py list in-progress
 
 ## Task Properties
 
 Each task should have the following properties:
 
-    **ID**: A unique identifier for the task
+**ID** : A unique identifier for the task
+**Description** : A short description of the task
+**Status** : The status of the task (todo, in-progress, done)
+**CreatedAt** : The date and time when the task was created
+**UpdatedAt**: The date and time when the task was last updated
 
-    **Description**: A short description of the task
-
-    **Status**: The status of the task (todo, in-progress, done)
-
-    **CreatedAt**: The date and time when the task was created
-
-    **UpdatedAt**: The date and time when the task was last updated
-
-Make sure to add these properties to the JSON file when adding a new task and update them when updating a task.
+Make sure to add these properties to the JSON file when adding a new task manually and update them when updating a task.<br>
+The task_list.json file is initialized as an empty list if it does not exist.
