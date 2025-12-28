@@ -11,5 +11,6 @@ roadmap.sh. Projects are organized by difficulty level.
 
 Each project folder contains its own source code and README.
 
-###task-tracker-cli
-**[Project URL](https://roadmap.sh/projects/task-tracker)**
+
+## Beginner Level Projects
+### task-tracker-cli :   [Project URL](https://roadmap.sh/projects/task-tracker)
