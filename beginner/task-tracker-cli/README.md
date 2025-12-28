@@ -1,6 +1,10 @@
 # Project Overview
 
-    Task tracker is a project used to track and manage your tasks. In this task, you will build a simple command line interface (CLI) to track what you need to do, what you have done, and what you are currently working on. This project will help you practice your programming skills, including working with the filesystem, handling user inputs, and building a simple CLI application.
+Task tracker is a project used to track and manage your tasks.<br>
+In this task, you will build a simple command line interface (CLI) to track<br>
+what you need to do, what you have done, and what you are currently working on. <br>
+This project will help you practice your programming skills, including working with the filesystem,<br>
+handling user inputs, and building a simple CLI application.
 
 ## Requirements
 
@@ -52,11 +56,15 @@ python task-cli.py list in-progress
 
 Each task should have the following properties:
 
-**ID** : A unique identifier for the task
-**Description** : A short description of the task
-**Status** : The status of the task (todo, in-progress, done)
-**CreatedAt** : The date and time when the task was created
+**ID** : A unique identifier for the task <br>
+**Description** : A short description of the task <br>
+**Status** : The status of the task (todo, in-progress, done) <br>
+**CreatedAt** : The date and time when the task was created <br>
 **UpdatedAt**: The date and time when the task was last updated
 
 Make sure to add these properties to the JSON file when adding a new task manually and update them when updating a task.<br>
 The task_list.json file is initialized as an empty list if it does not exist.
+
+## Future Enhancements
+    1. Add multiple tasks in a single command
+    2. Prevent duplicate task descriptions
