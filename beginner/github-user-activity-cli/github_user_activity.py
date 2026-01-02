@@ -49,7 +49,7 @@ class GitHubAPIClient:
 
         request = urllib.request.Request(github_api_url, headers=headers)
 
-        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+        with urllib.request.urlopen(request, self.timeout) as response:
             repos_data = json.loads(response.read().decode("utf-8"))
 
         if not repos_data:
