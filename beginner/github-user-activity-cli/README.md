@@ -58,33 +58,32 @@ This project helps developers and learners understand GitHub activities programm
 
 3. How to Run
 
-    python github_user_activity.py <github-username> <number-of-events>
+    python github_user_activity.py `github-username` `number-of-events`
 
-    Parameters:
-        <github-username> – GitHub username to fetch activity for.
-        <number-of-events> – Number of recent events to display (integer > 0).
+    Parameters:<br>
+        `github-username` – GitHub username to fetch activity for.
+        `number-of-events` – Number of recent events to display (integer > 0).
 
-    Example:
+    Example:<br>
         python github_user_activity.py seethavenkatesh0307 10
 
 ## Event Types Handled
 
 Currently, the CLI handles the following GitHub events:
 
-    CreateEvent – repository, branch, or tag creation
-    PushEvent – commits pushed to branches or tags
-    DeleteEvent – branch or tag deletion
-    ForkEvent – repository forked
-    WatchEvent – repository starred
-    IssuesEvent – issue actions such as opened, closed, labeled, assigned
-    PullRequestEvent – pull request actions such as opened, merged, closed
-    Unhandled events will display: Unhandled event type: <EventType>
+- CreateEvent – repository, branch, or tag creation
+- PushEvent – commits pushed to branches or tags
+- DeleteEvent – branch or tag deletion
+- ForkEvent – repository forked
+- WatchEvent – repository starred
+- IssuesEvent – issue actions such as opened, closed, labeled, assigned
+- PullRequestEvent – pull request actions such as opened, merged, closed
+- Unhandled events will display: Unhandled event type: <EventType>
 
 ## Future Improvements
 
-    Add authentication to fetch private repository events.
-    Handle additional event types such as MemberEvent, GollumEvent, ReleaseEvent.
-    Add colored CLI output for better readability.
-    Option to save output to a file (JSON, CSV, or TXT).
-    Support pagination to fetch more than GitHub API’s default recent events.
-    Implement a configuration file to customize CLI behavior.
+- Handle additional event types such as MemberEvent, GollumEvent, ReleaseEvent.
+- Add colored CLI output for better readability.
+- Option to save output to a file (JSON, CSV, or TXT).
+- Support pagination to fetch more than GitHub API’s default recent events.
+- Implement a configuration file to customize CLI behavior.

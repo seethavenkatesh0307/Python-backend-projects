@@ -4,13 +4,77 @@ import urllib.request
 import json
 import sys
 from urllib.error import HTTPError, URLError
+import os
+import getpass
+import logging
 
 
-class GitHubActivityCLI:
+class GitHubAPIClient:
     """Class to fetch and display GitHub user activity."""
 
     def __init__(self, user: str):
         self.username = user
+        self.headers = {"User-Agent": "github-user-activity-cli"}
+        self.timeout = 10
+
+    def _get_github_token(self) -> str | None:
+        """Get github token.
+
+        Returns:
+            str: GitHub token.
+        """
+
+        token = os.getenv("GITHUB_TOKEN")
+        if not token:
+            try:
+                token = getpass.getpass("Enter GitHub token: ")
+            except (KeyboardInterrupt, EOFError):
+                logging.warning("Input cancelled by user")
+                return None
+            except OSError as e:
+                logging.warning("Cannot read input: %s", e)
+                return None
+        return token
+
+    def _make_request(self, headers: dict) -> list:
+        """Request github url without token.
+
+        Args:
+            headers (dict) : headers to be sent with request.
+
+        Returns:
+            list : List of repositories event raw data.
+        """
+        github_api_url = f"https://api.github.com/users/{self.username}/events"
+
+        request = urllib.request.Request(github_api_url, headers=headers)
+
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
+            repos_data = json.loads(response.read().decode("utf-8"))
+
+        if not repos_data:
+            logging.info("No activity found for user '%s'.", self.username)
+
+        return repos_data
+
+    def _retry_request_with_token(self) -> list:
+        """Retry request with authentication token.
+
+        Returns:
+            list: List of repositories event raw data.
+        """
+        try:
+            token = self._get_github_token()
+            if not token:
+                return []
+
+            headers = self.headers.copy()
+            headers["Authorization"] = f"Bearer {token}"
+
+            return self._make_request(headers)
+        except HTTPError as auth_error:
+            logging.warning("Authentication failed or access denied: %s", auth_error)
+            return []
 
     def fetch_activity(self) -> list:
         """Fetch user activity from GitHub API.
@@ -22,29 +86,36 @@ class GitHubActivityCLI:
             list: List of repositories event raw data.
         """
         try:
-            github_api_url = f"https://api.github.com/users/{self.username}/events"
-            headers = {"User-Agent": "github-user-activity-cli"}
-            request = urllib.request.Request(github_api_url, headers=headers)
-
-            with urllib.request.urlopen(request) as response:
-                repos_data = json.loads(response.read().decode("utf-8"))
-
-            return repos_data
+            return self._make_request(self.headers)
         except HTTPError as http_error:
-            if http_error.code == 404:
-                print(f"User '{self.username}' not found on GitHub.")
-                return []
+            if http_error.code == 401:
+                return self._retry_request_with_token()
+
             if http_error.code == 403:
-                print("API rate limit exceeded. Please try again later.")
+                logging.warning(
+                    "Access forbidden or rate limit may have been exceeded. "
+                    "Try again with a token or wait and retry."
+                )
+                # Optionally, retry for access issue
+                return self._retry_request_with_token()
+
+            if http_error.code == 404:
+                logging.warning(
+                    "User '%s' not found on GitHub or Access denied.", self.username
+                )
                 return []
-            print(f"HTTP Error: {http_error.code}")
+            logging.warning("HTTP Error: %d", http_error.code)
             return []
         except URLError as url_error:
-            print(f"URL Error: {url_error.reason}")
+            logging.warning("URL Error: %s", url_error.reason)
             return []
         except Exception as error:
-            print(f"Error fetching data from GitHub API: {error}")
+            logging.warning("Error fetching data from GitHub API %s", error)
             return []
+
+
+class GitHubEventHandler:
+    """Class to formats different GitHub event types outputs."""
 
     def _handle_create_event(self, event: dict) -> str:
         """Handle CreateEvent type.
@@ -237,23 +308,25 @@ def main():
 
     if len(sys.argv) == 3:
         github_username = sys.argv[1]
-        github_activity = GitHubActivityCLI(github_username)
-        events = github_activity.fetch_activity()
+        github_api_client = GitHubAPIClient(github_username)
+        events = github_api_client.fetch_activity()
 
         try:
             number_of_events = int(sys.argv[2])
-
             if number_of_events <= 0:
                 raise ValueError("Number of events must be greater than zero")
         except ValueError:
-            print("Please enter a valid integer for number of events.")
+            logging.error("Please enter a valid integer for number of events.")
             return
 
-        print("-" * 40)
-        for event in events[:number_of_events]:
-            display_string = github_activity.handle_output(event)
-            print(display_string.strip())
-        print("-" * 40)
+        if events:
+            github_event_handler = GitHubEventHandler()
+
+            print("-" * 40)
+            for event in events[:number_of_events]:
+                display_string = github_event_handler.handle_output(event)
+                print(display_string.strip())
+            print("-" * 40)
     else:
         print(
             "Usage : python github_user_activity.py <github-username> <number of events>"
