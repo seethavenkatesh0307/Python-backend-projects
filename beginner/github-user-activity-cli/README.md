@@ -5,6 +5,8 @@ GitHub User Activity CLI is a command-line tool that allows you to fetch and dis
 It shows events such as branch creation, commits, pull requests, issues, repository forks, tags, and more in a simple and readable format.
 This project helps developers and learners understand GitHub activities programmatically and visualize user contributions.
 
+**[Project URL](https://roadmap.sh/projects/github-user-activity)**
+
 ---
 
 ## **Requirements**
