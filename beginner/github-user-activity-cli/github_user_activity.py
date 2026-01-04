@@ -3,10 +3,24 @@
 import urllib.request
 import json
 import sys
+
+from pathlib import Path
+from datetime import datetime, timezone
 from urllib.error import HTTPError, URLError
 import os
 import getpass
 import logging
+
+# -------------------------------------
+#   Configuration constants
+# -------------------------------------
+
+TIMEOUT_SECONDS = 10
+CACHE_TTL_SECONDS = 900
+MIN_CLI_ARGS_COUNT = 3
+CLI_ARGS_COUNT_WITH_FILTER = 4
+OUTPUT_SEPARATOR_WIDTH = 40
+GITHUB_DEFAULT_EVENTS_PER_PAGE = 30
 
 
 class GitHubAPIClient:
@@ -15,7 +29,8 @@ class GitHubAPIClient:
     def __init__(self, user: str):
         self.username = user
         self.headers = {"User-Agent": "github-user-activity-cli"}
-        self.timeout = 10
+        self.timeout = TIMEOUT_SECONDS
+        self.timestamp: str | None = None
 
     def _get_github_token(self) -> str | None:
         """Get github token.
@@ -49,15 +64,17 @@ class GitHubAPIClient:
 
         request = urllib.request.Request(github_api_url, headers=headers)
 
-        with urllib.request.urlopen(request, self.timeout) as response:
+        with urllib.request.urlopen(request, timeout=self.timeout) as response:
             repos_data = json.loads(response.read().decode("utf-8"))
 
         if not repos_data:
-            logging.info("No activity found for user '%s'.", self.username)
+            logging.warning("No activity found for user '%s'.", self.username)
+
+        self.timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
         return repos_data
 
-    def _retry_request_with_token(self) -> list:
+    def _retry_request_with_token(self) -> list | None:
         """Retry request with authentication token.
 
         Returns:
@@ -74,9 +91,9 @@ class GitHubAPIClient:
             return self._make_request(headers)
         except HTTPError as auth_error:
             logging.warning("Authentication failed or access denied: %s", auth_error)
-            return []
+            return None
 
-    def fetch_activity(self) -> list:
+    def fetch_activity(self) -> list | None:
         """Fetch user activity from GitHub API.
 
         Args:
@@ -103,19 +120,34 @@ class GitHubAPIClient:
                 logging.warning(
                     "User '%s' not found on GitHub or Access denied.", self.username
                 )
-                return []
+                return None
             logging.warning("HTTP Error: %d", http_error.code)
-            return []
+            return None
         except URLError as url_error:
             logging.warning("URL Error: %s", url_error.reason)
-            return []
+            return None
         except Exception as error:
             logging.warning("Error fetching data from GitHub API %s", error)
-            return []
+            return None
 
 
 class GitHubEventHandler:
     """Class to formats different GitHub event types outputs."""
+
+    HANDLERS = {
+        "CreateEvent": "_handle_create_event",
+        "PushEvent": "_handle_push_event",
+        "DeleteEvent": "_handle_delete_event",
+        "ForkEvent": "_handle_fork_event",
+        "WatchEvent": "_handle_watch_event",
+        "IssuesEvent": "_handle_issues_event",
+        "PullRequestEvent": "_handle_pull_request_event",
+    }
+
+    @staticmethod
+    def get_supported_events():
+        """Get supported event types."""
+        return set(GitHubEventHandler.HANDLERS.keys())
 
     def _handle_create_event(self, event: dict) -> str:
         """Handle CreateEvent type.
@@ -285,52 +317,195 @@ class GitHubEventHandler:
         """
         event_type = event.get("type")
 
-        handlers = {
-            "CreateEvent": self._handle_create_event,
-            "PushEvent": self._handle_push_event,
-            "DeleteEvent": self._handle_delete_event,
-            "ForkEvent": self._handle_fork_event,
-            "WatchEvent": self._handle_watch_event,
-            "IssuesEvent": self._handle_issues_event,
-            "PullRequestEvent": self._handle_pull_request_event,
-        }
+        handler_name = self.HANDLERS.get(event_type)
 
-        handler = handlers.get(event_type)
+        if not handler_name:
+            return f"Unhandled event type: {event_type}"
 
-        if handler:
-            return handler(event)
+        handler = getattr(self, handler_name, None)
 
-        return f"Unhandled event type: {event_type}"
+        if not callable(handler):
+            return f"Handler not implemented for event type: {event_type}"
+
+        return handler(event)
+
+
+class EventsCacheHandler:
+    """Class to handle caching of GitHub events."""
+
+    @staticmethod
+    def _get_cache_file_name(user: str) -> str:
+        """Get cache file name for a user.
+
+        Args:
+            user (str): GitHub username.
+
+        Returns:
+            str: Cache file name.
+        """
+        return f".events_cache_{user}.json"
+
+    def write_cache(self, user: str, cache: dict):
+        """Writing events to cache file.
+
+        Args:
+            user (str): GitHub username.
+        """
+        cache_file = self._get_cache_file_name(user)
+        try:
+            with open(cache_file, "w", encoding="utf-8") as file:
+                json.dump(cache, file, indent=4)
+        except OSError as e:
+            logging.warning("Failed to write cache file: %s", e)
+
+    def _is_cache_expired(self, cached_at: str, ttl_seconds: int) -> bool:
+        """Check if the cache is expired based on TTL.
+
+        Args:
+            cached_at (str): Timestamp when the cache was created.
+            ttl_seconds (int): Time-to-live in seconds.
+
+        Returns:
+            bool: True if cache is expired, False otherwise.
+        """
+        try:
+            cached_time = datetime.fromisoformat(cached_at.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            logging.warning("Invalid cache timestamp, treating cache as expired")
+            return True
+        now = datetime.now(timezone.utc)
+        return (now - cached_time).total_seconds() > ttl_seconds
+
+    def check_cache_usability(self, user: str) -> list | None:
+        """Check if cache is usable and return cached events if valid.
+
+        Args:
+            user (str): GitHub username.
+
+        Returns:
+            list | None: Cached events if valid, None otherwise.
+        """
+        cache_file = self._get_cache_file_name(user)
+        if not Path(cache_file).is_file():
+            return None
+
+        try:
+            with open(cache_file, "r", encoding="utf-8") as file:
+                cached_data = json.load(file)
+        except (OSError, json.JSONDecodeError) as e:
+            logging.warning("Failed to read cache file: %s", e)
+            return None
+
+        timestamp = cached_data.get("timestamp")
+        ttl = cached_data.get("ttl", CACHE_TTL_SECONDS)
+        events = cached_data.get("events", [])
+
+        if not isinstance(events, list):
+            logging.warning("Invalid cache format, ignoring cache")
+            return None
+
+        if timestamp and not self._is_cache_expired(timestamp, ttl):
+            return events
+
+        return None
+
+
+class CLIHandler:
+    """Class to handle cli arguments and displaying output."""
+
+    @staticmethod
+    def parse_mandatory_cli_args() -> tuple[str | None, int | None]:
+        """parse cli arguments.
+
+        Returns:
+            tuple[str, int] | None: github username and number of events
+        """
+        if len(sys.argv) < MIN_CLI_ARGS_COUNT:
+            print(
+                "Usage: python github_user_activity.py <github-username> <number of events> [event-type(optional)]"
+            )
+            return None, None
+
+        github_username = sys.argv[1]
+
+        try:
+            number_of_events = int(sys.argv[2])
+            if number_of_events <= 0:
+                logging.error("Number of events must be greater than zero")
+                return None, None
+
+            if number_of_events > GITHUB_DEFAULT_EVENTS_PER_PAGE:
+                logging.error(
+                    "Number of events cannot exceed %s", GITHUB_DEFAULT_EVENTS_PER_PAGE
+                )
+                return None, None
+
+        except ValueError:
+            logging.error("Please enter a valid integer for number of events.")
+            return None, None
+
+        return github_username, number_of_events
+
+    @staticmethod
+    def parse_optional_cli_args(supported_events: set) -> str | None:
+        """Parse optional cli arguments.
+
+        Returns:
+            str: event type if specified and valid, None otherwise.
+        """
+        if len(sys.argv) == CLI_ARGS_COUNT_WITH_FILTER:
+            if sys.argv[3] in supported_events:
+                return sys.argv[3]
+
+            print("Invalid event type specified.")
+            print("Supporting event types are: ", supported_events)
+
+        return None
 
 
 def main():
     """Main function to run the CLI application."""
 
-    if len(sys.argv) == 3:
-        github_username = sys.argv[1]
-        github_api_client = GitHubAPIClient(github_username)
+    github_username, number_of_events = CLIHandler.parse_mandatory_cli_args()
+
+    if not github_username or not number_of_events:
+        return
+
+    events_cache_handler = EventsCacheHandler()
+    github_api_client = GitHubAPIClient(github_username)
+
+    events = events_cache_handler.check_cache_usability(github_username)
+
+    if not events:
         events = github_api_client.fetch_activity()
-
-        try:
-            number_of_events = int(sys.argv[2])
-            if number_of_events <= 0:
-                raise ValueError("Number of events must be greater than zero")
-        except ValueError:
-            logging.error("Please enter a valid integer for number of events.")
-            return
-
         if events:
-            github_event_handler = GitHubEventHandler()
+            cache = {
+                "timestamp": github_api_client.timestamp,
+                "ttl": CACHE_TTL_SECONDS,
+                "events": events,
+            }
+            events_cache_handler.write_cache(github_username, cache)
 
-            print("-" * 40)
-            for event in events[:number_of_events]:
-                display_string = github_event_handler.handle_output(event)
-                print(display_string.strip())
-            print("-" * 40)
-    else:
-        print(
-            "Usage : python github_user_activity.py <github-username> <number of events>"
-        )
+    if events:
+        github_event_handler = GitHubEventHandler()
+        supported_events = github_event_handler.get_supported_events()
+        requested_event_type = CLIHandler.parse_optional_cli_args(supported_events)
+
+        print("-" * OUTPUT_SEPARATOR_WIDTH)
+        display_strings = []
+        for event in events:
+            if requested_event_type and event.get("type") != requested_event_type:
+                continue
+            display_strings.append(github_event_handler.handle_output(event))
+            if len(display_strings) == number_of_events:
+                break
+
+        if display_strings:
+            for display_string in display_strings:
+                print(display_string)
+        else:
+            print("No events to display.")
+        print("-" * OUTPUT_SEPARATOR_WIDTH)
 
 
 if __name__ == "__main__":

@@ -36,6 +36,8 @@ This project helps developers and learners understand GitHub activities programm
   - Pull Requests (opened, merged, closed, etc.)
 - Display a custom number of recent events via command-line argument.
 - Handles common errors like invalid username, invalid input, API rate limits, and network errors.
+- Support for adding GitHub Event Types in future
+- Cache TTL: The CLI caches GitHub API responses for 15 minutes (900 seconds) to minimize unnecessary API requests while ensuring activity data remains sufficiently up to date for typical, low-frequency repository usage.
 
 ---
 
@@ -67,6 +69,8 @@ This project helps developers and learners understand GitHub activities programm
     Example:<br>
         python github_user_activity.py seethavenkatesh0307 10
 
+---
+
 ## Event Types Handled
 
 Currently, the CLI handles the following GitHub events:
@@ -80,18 +84,10 @@ Currently, the CLI handles the following GitHub events:
 - PullRequestEvent – pull request actions such as opened, merged, closed
 - Unhandled events will display: Unhandled event type: <EventType>
 
+---
+
 ## Future Improvements
 
-- Support for Additional GitHub Event Types
-    - Support for Additional GitHub Event Types means designing the event-handling logic in a way that new GitHub events can be added easily without changing existing code or breaking functionality.
-- Command-Line Options & Flags
-    - Command-line options & flags allow users to control the CLI behavior using named arguments, making the tool more flexible, user-friendly, and extensible.
-- Response Caching
-    - Response caching stores recent API responses temporarily to avoid repeated network calls. It improves performance and helps stay within API rate limits, especially for CLI tools that may be run frequently
-- Output Export (JSON / File)
-    - Output export allows users to save CLI results to files like JSON or text instead of only displaying them in the terminal.
-- Packaging as an Installable CLI Tool
-    - Packaging as an installable CLI tool allows a Python application to be installed via pip and executed as a global command instead of a script.
 - Support pagination to fetch more than GitHub API’s default recent events.
     - GitHub APIs return data in pages. Pagination allows the CLI to fetch multiple pages to retrieve more than the default recent events limit.”
 
